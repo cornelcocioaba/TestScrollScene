@@ -1,16 +1,20 @@
 package org.andengine.testscrollscene;
 
 import org.andengine.engine.camera.Camera;
+import org.andengine.engine.camera.hud.HUD;
 import org.andengine.engine.options.EngineOptions;
 import org.andengine.engine.options.ScreenOrientation;
 import org.andengine.engine.options.resolutionpolicy.RatioResolutionPolicy;
+import org.andengine.entity.Entity;
 import org.andengine.entity.primitive.Rectangle;
 import org.andengine.entity.scene.Scene;
 import org.andengine.entity.scene.background.Background;
 import org.andengine.entity.scene.scrollscene.ScrollScene;
+import org.andengine.entity.scene.scrollscene.ScrollScene.IOnScrollScenePageListener;
 import org.andengine.entity.sprite.ButtonSprite;
 import org.andengine.entity.sprite.ButtonSprite.OnClickListener;
 import org.andengine.entity.sprite.Sprite;
+import org.andengine.entity.sprite.TiledSprite;
 import org.andengine.entity.text.Text;
 import org.andengine.entity.util.FPSLogger;
 import org.andengine.opengl.font.Font;
@@ -23,6 +27,7 @@ import org.andengine.opengl.texture.atlas.bitmap.source.IBitmapTextureAtlasSourc
 import org.andengine.opengl.texture.atlas.buildable.builder.BlackPawnTextureAtlasBuilder;
 import org.andengine.opengl.texture.atlas.buildable.builder.ITextureAtlasBuilder.TextureAtlasBuilderException;
 import org.andengine.opengl.texture.region.ITextureRegion;
+import org.andengine.opengl.texture.region.ITiledTextureRegion;
 import org.andengine.ui.activity.SimpleBaseGameActivity;
 import org.andengine.util.color.Color;
 import org.andengine.util.debug.Debug;
@@ -31,7 +36,7 @@ import android.graphics.Typeface;
 import android.widget.Toast;
 
 
-public class TestScrollScene extends SimpleBaseGameActivity{
+public class TestScrollScene extends SimpleBaseGameActivity implements IOnScrollScenePageListener{
 	// ===========================================================
 	// Constants
 	// ===========================================================
@@ -46,7 +51,10 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 	private ITextureRegion mFace1TextureRegion;
 	private ITextureRegion mFace2TextureRegion;
 	private ITextureRegion mFace3TextureRegion;
+	private ITiledTextureRegion mBulletTextureRegion;
 	private Font mFont;
+	private Camera mCamera;
+	private Entity pageIndicator;
 
 	
 	// ===========================================================
@@ -63,9 +71,9 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 	
 	@Override
 	public EngineOptions onCreateEngineOptions() {
-		final Camera camera = new Camera(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
+		this.mCamera = new Camera(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
 
-		return new EngineOptions(true, ScreenOrientation.LANDSCAPE_SENSOR, new RatioResolutionPolicy(CAMERA_WIDTH, CAMERA_HEIGHT), camera);
+		return new EngineOptions(true, ScreenOrientation.LANDSCAPE_SENSOR, new RatioResolutionPolicy(CAMERA_WIDTH, CAMERA_HEIGHT), mCamera);
 	}
 
 	@Override
@@ -76,7 +84,7 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 		this.mFace1TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_box_tiled.png");
 		this.mFace2TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_circle_tiled.png");
 		this.mFace3TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_hexagon_tiled.png");
-
+		this.mBulletTextureRegion = BitmapTextureAtlasTextureRegionFactory.createTiledFromAsset(this.mBitmapTextureAtlas, this, "bullets.png", 1, 2);
 		try {
 			this.mBitmapTextureAtlas.build(new BlackPawnTextureAtlasBuilder<IBitmapTextureAtlasSource, BitmapTextureAtlas>(0, 0, 0));
 			this.mBitmapTextureAtlas.load();
@@ -93,7 +101,9 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 	protected Scene onCreateScene() {
 		this.mEngine.registerUpdateHandler(new FPSLogger());
 
-		final ScrollScene scene = new ScrollScene(CAMERA_WIDTH * 0.75f, CAMERA_HEIGHT);
+		//the width and height of the page should be usually the same size
+		//as the camera. T
+		final ScrollScene scene = new ScrollScene(CAMERA_WIDTH, CAMERA_HEIGHT);
 		//the offset represents how much the layers overlap
 		scene.setOffset(0);
 		
@@ -113,6 +123,8 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 		Rectangle page2 = new Rectangle(0, 0, 0, 0, this.getVertexBufferObjectManager());
 		page2.setColor(Color.RED);
 		
+		Rectangle page3 = new Rectangle(0, 0, 0, 0, this.getVertexBufferObjectManager());
+		
 		/* Create the button and add it to the scene. */
 		final Sprite face = new ButtonSprite(centerX, centerY, this.mFace1TextureRegion, this.mFace2TextureRegion, this.mFace3TextureRegion, this.getVertexBufferObjectManager(), new OnClickListener() {
 			@Override
@@ -129,23 +141,63 @@ public class TestScrollScene extends SimpleBaseGameActivity{
 		//You can add whatever you want (sprites, buttonSprites, text, menus etc)
 		final Sprite face2 = new Sprite(centerX, centerY, this.mFace3TextureRegion, this.getVertexBufferObjectManager());
 		
-		final Text text = new Text(250, 240, this.mFont, "Hello !", this.getVertexBufferObjectManager());
+		final Text text = new Text(centerX, centerY, this.mFont, "Hello !", this.getVertexBufferObjectManager());
 		
 		scene.registerTouchArea(face);
 		page1.attachChild(face);
 		page2.attachChild(face2);
-		page2.attachChild(text);
+		page3.attachChild(text);
 		
 		scene.addPage(page1);
 		scene.addPage(page2);
+		scene.addPage(page3);
 		
+		//TODO find better solution
+		this.pageIndicator = new Entity();
+		final float margin = 10;
+		final float bulletWidth = mBulletTextureRegion.getWidth();
+		final int pageNo = scene.getPagesCount();
+		float pageIndicatorWidth = 0;
+		for(int i = 0; i < pageNo; i++){
+			final TiledSprite bullet = new TiledSprite(i * (bulletWidth + margin), 0, mBulletTextureRegion, this.getVertexBufferObjectManager());
+			pageIndicator.attachChild(bullet);
+			pageIndicatorWidth += bulletWidth + margin;
+		}
+		final float pageIndicatorCenterX = (CAMERA_WIDTH - pageIndicatorWidth) * 0.5f;
+		pageIndicator.setPosition(pageIndicatorCenterX, CAMERA_HEIGHT - 100);
+		HUD hud = new HUD();
+		hud.attachChild(pageIndicator);
+		this.mCamera.setHUD(hud);
+		
+		TiledSprite first = (TiledSprite) pageIndicator.getChildByIndex(0);
+		first.setCurrentTileIndex(1);
+		
+		scene.registerScrollScenePageListener(this);
 		scene.setTouchAreaBindingOnActionDownEnabled(true);
 
 		return scene;
 	}
+	
+	@Override
+	public void onMoveToPageStarted(int pPageNumber) {
+		//reset all tiles
+		final int count = pageIndicator.getChildCount();
+		for(int i = 0; i < count; i++){
+			TiledSprite first = (TiledSprite) pageIndicator.getChildByIndex(i);
+			first.setCurrentTileIndex(0);
+		}
+		//change the one we need
+		TiledSprite first = (TiledSprite) pageIndicator.getChildByIndex(pPageNumber);
+		first.setCurrentTileIndex(1);
+	}
+
+	@Override
+	public void onMoveToPageFinished(int pPageNumber) {
+	}
 	// ===========================================================
 	// Methods
 	// ===========================================================
+
 
 	// ===========================================================
 	// Inner and Anonymous Classes
