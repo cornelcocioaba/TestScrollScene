@@ -120,7 +120,8 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 		 **/
 		Rectangle page1 = new Rectangle(0, 0, 0, 0, this.getVertexBufferObjectManager());
 		
-		Rectangle page2 = new Rectangle(0, 0, 0, 0, this.getVertexBufferObjectManager());
+		//add width and height so we can see the rectangle
+		Rectangle page2 = new Rectangle(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT, this.getVertexBufferObjectManager());
 		page2.setColor(Color.RED);
 		
 		Rectangle page3 = new Rectangle(0, 0, 0, 0, this.getVertexBufferObjectManager());
@@ -147,6 +148,8 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 		page1.attachChild(face);
 		page2.attachChild(face2);
 		page3.attachChild(text);
+		
+		scene.registerTouchArea(face);
 		
 		scene.addPage(page1);
 		scene.addPage(page2);
