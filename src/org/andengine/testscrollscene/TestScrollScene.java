@@ -31,6 +31,7 @@ import org.andengine.opengl.texture.region.ITiledTextureRegion;
 import org.andengine.ui.activity.SimpleBaseGameActivity;
 import org.andengine.util.color.Color;
 import org.andengine.util.debug.Debug;
+import org.andengine.util.modifier.ease.EaseBackOut;
 
 import android.graphics.Typeface;
 import android.widget.Toast;
@@ -40,8 +41,8 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 	// ===========================================================
 	// Constants
 	// ===========================================================
-	private static final float CAMERA_WIDTH = 1196;
-	private static final float CAMERA_HEIGHT = 720;
+	private static final float CAMERA_WIDTH = 800;
+	private static final float CAMERA_HEIGHT = 480;
 	
 	// ===========================================================
 	// Fields
@@ -55,6 +56,7 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 	private Font mFont;
 	private Camera mCamera;
 	private Entity pageIndicator;
+	private ScrollScene mScene;
 
 	
 	// ===========================================================
@@ -80,13 +82,13 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 	protected void onCreateResources() {
 		BitmapTextureAtlasTextureRegionFactory.setAssetBasePath("gfx/");
 
-		this.mBitmapTextureAtlas = new BuildableBitmapTextureAtlas(this.getTextureManager(), 512, 512);
+		this.mBitmapTextureAtlas = new BuildableBitmapTextureAtlas(this.getTextureManager(), 512, 512, TextureOptions.BILINEAR);
 		this.mFace1TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_box_tiled.png");
 		this.mFace2TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_circle_tiled.png");
 		this.mFace3TextureRegion = BitmapTextureAtlasTextureRegionFactory.createFromAsset(this.mBitmapTextureAtlas, this, "face_hexagon_tiled.png");
 		this.mBulletTextureRegion = BitmapTextureAtlasTextureRegionFactory.createTiledFromAsset(this.mBitmapTextureAtlas, this, "bullets.png", 1, 2);
 		try {
-			this.mBitmapTextureAtlas.build(new BlackPawnTextureAtlasBuilder<IBitmapTextureAtlasSource, BitmapTextureAtlas>(0, 0, 0));
+			this.mBitmapTextureAtlas.build(new BlackPawnTextureAtlasBuilder<IBitmapTextureAtlasSource, BitmapTextureAtlas>(1, 1, 1));
 			this.mBitmapTextureAtlas.load();
 		} catch (TextureAtlasBuilderException e) {
 			Debug.e(e);
@@ -103,15 +105,15 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 
 		//the width and height of the page should be usually the same size
 		//as the camera. T
-		final ScrollScene scene = new ScrollScene(CAMERA_WIDTH, CAMERA_HEIGHT);
+		this.mScene = new ScrollScene(CAMERA_WIDTH, CAMERA_HEIGHT);
 		//the offset represents how much the layers overlap
-		scene.setOffset(0);
+		this.mScene.setOffset(0);
 		
-		scene.setBackground(new Background(0.09804f, 0.6274f, 0.8784f));
+		this.mScene.setBackground(new Background(0.09804f, 0.6274f, 0.8784f));
 
 		/* Calculate the coordinates for the face, so its centered on the camera. */
-		final float centerX = (scene.getPageWidth() - this.mFace1TextureRegion.getWidth()) / 2;
-		final float centerY = (scene.getPageHeight() - this.mFace1TextureRegion.getHeight()) / 2;
+		final float centerX = (this.mScene.getPageWidth() - this.mFace1TextureRegion.getWidth()) / 2;
+		final float centerY = (this.mScene.getPageHeight() - this.mFace1TextureRegion.getHeight()) / 2;
 
 		/**
 		 * This looks stupid, but the main reason why I'm doing this is because Entity doesn't have width/height in gles2 branch
@@ -144,22 +146,22 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 		
 		final Text text = new Text(centerX, centerY, this.mFont, "Hello !", this.getVertexBufferObjectManager());
 		
-		scene.registerTouchArea(face);
+		this.mScene.registerTouchArea(face);
 		page1.attachChild(face);
 		page2.attachChild(face2);
 		page3.attachChild(text);
 		
-		scene.registerTouchArea(face);
+		this.mScene.registerTouchArea(face);
 		
-		scene.addPage(page1);
-		scene.addPage(page2);
-		scene.addPage(page3);
+		this.mScene.addPage(page1);
+		this.mScene.addPage(page2);
+		this.mScene.addPage(page3);
 		
 		//TODO find better solution
 		this.pageIndicator = new Entity();
 		final float margin = 10;
 		final float bulletWidth = mBulletTextureRegion.getWidth();
-		final int pageNo = scene.getPagesCount();
+		final int pageNo = this.mScene.getPagesCount();
 		float pageIndicatorWidth = 0;
 		for(int i = 0; i < pageNo; i++){
 			final TiledSprite bullet = new TiledSprite(i * (bulletWidth + margin), 0, mBulletTextureRegion, this.getVertexBufferObjectManager());
@@ -175,10 +177,13 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 		TiledSprite first = (TiledSprite) pageIndicator.getChildByIndex(0);
 		first.setCurrentTileIndex(1);
 		
-		scene.registerScrollScenePageListener(this);
-		scene.setTouchAreaBindingOnActionDownEnabled(true);
+		//change ease function test
+		this.mScene.setEaseFunction(EaseBackOut.getInstance());
+		
+		this.mScene.registerScrollScenePageListener(this);
+		this.mScene.setTouchAreaBindingOnActionDownEnabled(true);
 
-		return scene;
+		return this.mScene;
 	}
 	
 	@Override
@@ -196,6 +201,7 @@ public class TestScrollScene extends SimpleBaseGameActivity implements IOnScroll
 
 	@Override
 	public void onMoveToPageFinished(int pPageNumber) {
+
 	}
 	// ===========================================================
 	// Methods
